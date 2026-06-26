@@ -6,7 +6,7 @@
 
 * **Language:** Python 3.12
 * **Framework:** [aiogram 3.x](https://docs.aiogram.dev/) (Asynchronous Telegram Bot API)
-* **AI Engine:** Open router (Grammar, Style & Naturalness analysis)
+* **AI Engine:** OpenRouter (GPT-4o-mini) for grammar, style & naturalness analysis
 * **Database:** [aiosqlite](https://github.com/omnilib/aiosqlite) (Asynchronous SQLite for persistent user settings and history)
 * **Deployment:** [Dokploy](https://dokploy.com/) (Self-hosted PaaS) on Linode VPS
 * **CI/CD:** GitHub Actions + Docker
@@ -95,7 +95,7 @@ A modular structure ensures that the "Gatekeeper" (middleware) and the "Brains" 
 │   ├── services/       # OpenRouter AI API wrapper (Linguistic logic)
 │   └── main.py         # Entry point (Bot polling setup)
 ├── Dockerfile          # Optimized Python multistage build
-├── requirements.txt    # aiogram, aiosqlite, google-generativeai
+├── requirements.txt    # aiogram, aiosqlite, httpx, python-dotenv
 └── .dockerignore
 ```
 
@@ -109,37 +109,74 @@ A modular structure ensures that the "Gatekeeper" (middleware) and the "Brains" 
 
 4. **No Docker Port Mapping:** Since the bot has no web server, do not map any ports in your Docker configuration. This keeps the container completely isolated from inbound internet traffic.
 
-## 🚀 Local Setup & Initialization
+## 🚀 Local Setup
 
-1. **Identify your ID**
+### 1. Prerequisites
 
-Message @userinfobot on Telegram to get your numerical ID (and your family member's ID).
+- Python 3.12+
+- A Telegram bot token (from [@BotFather](https://t.me/BotFather))
+- An OpenRouter API key (from [openrouter.ai/keys](https://openrouter.ai/keys))
 
-2. **Bootstrap the DB**
+### 2. Identify your Telegram ID
 
-Before your first deployment, create the folder and insert your admin user manually to ensure you have access immediately:
+Message [@userinfobot](https://t.me/userinfobot) on Telegram to get your numerical ID.
+
+### 3. Bootstrap the database
+
+The schema is created automatically on first run, but you need to insert yourself as a whitelisted user:
 
 ```bash
-# Create the local data directory
 mkdir -p data
-
-# Create the schema
-sqlite3 data/salutbot.db "CREATE TABLE users (telegram_id INTEGER PRIMARY KEY, name TEXT, min_words INTEGER, is_active BOOLEAN);"
-
-# Insert yourself as the admin (replace 12345678 with your actual ID)
-sqlite3 data/salutbot.db "INSERT INTO users VALUES (12345678, 'Admin', 15, 1);"
+sqlite3 data/salutbot.db "INSERT INTO users VALUES (<YOUR_TELEGRAM_ID>, 'Admin', 15, 1);"
 ```
 
-3. **Install & Run**
+### 4. Install dependencies
 
 ```bash
-# Clone & Install
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+```
 
-# Create your .env with your keys
-cp .env.example .env 
+### 5. Configure environment
 
-# Run locally for testing
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your keys:
+
+```env
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+OPEN_ROUTER_API_KEY=your_open_router_ai_key
+DATABASE_PATH=data/salutbot.db
+```
+
+### 6. Run
+
+```bash
 python -m src.main
 ```
+
+### 7. Chat with the bot
+
+Search for your bot username on Telegram (e.g., `@frenchTutorDevBot`) and hit **Start**. Send a message in French to receive corrections.
+
+### Troubleshooting
+
+**Polling conflict (`Conflict: terminated by other getUpdates request`)**
+
+This means another instance is already polling the same bot token. Stop any other running instances, then:
+
+```bash
+python -c "
+import httpx, os
+from dotenv import load_dotenv
+load_dotenv()
+r = httpx.get(f'https://api.telegram.org/bot{os.getenv(\"TELEGRAM_BOT_TOKEN\")}/deleteWebhook?drop_pending_updates=true')
+print(r.json())
+"
+```
+
+Wait a few seconds and try again. Only one bot instance can run per token.
 
